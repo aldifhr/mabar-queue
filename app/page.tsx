@@ -1,10 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
 
 interface MatchData {
   nama: string
@@ -12,6 +8,7 @@ interface MatchData {
 }
 
 const STORAGE_KEY = 'mabar-match'
+const SOCIABUZZ_URL = 'https://api.indofinity.com/api/webhooks/sociabuzz/7da4b319-c02a-4c7f-8740-155e740279c9'
 
 function loadData(): MatchData {
   if (typeof window === 'undefined') return { nama: '', totalMatch: 0 }
@@ -28,144 +25,155 @@ function saveData(d: MatchData) {
   localStorage.setItem('mabar-channel', Date.now().toString())
 }
 
+function Modal({ open, onClose, children }: { open: boolean; onClose: () => void; children: React.ReactNode }) {
+  if (!open) return null
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/80" onClick={onClose} />
+      <div className="relative bg-zinc-950 border border-white/10 rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl">
+        {children}
+      </div>
+    </div>
+  )
+}
+
 export default function Home() {
   const [data, setData] = useState<MatchData>({ nama: '', totalMatch: 0 })
   const [nama, setNama] = useState('')
   const [matchInput, setMatchInput] = useState('')
   const [loaded, setLoaded] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [showReset, setShowReset] = useState(false)
+  const [showToast, setShowToast] = useState('')
 
   useEffect(() => {
     const d = loadData()
-    setData(d)
-    setNama(d.nama)
-    setLoaded(true)
+    setData(d); setNama(d.nama); setLoaded(true)
   }, [])
 
-  useEffect(() => {
-    if (loaded) saveData(data)
-  }, [data, loaded])
+  useEffect(() => { if (loaded) saveData(data) }, [data, loaded])
 
   useEffect(() => {
-    const handler = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEY) setData(loadData())
-    }
+    const handler = (e: StorageEvent) => { if (e.key === STORAGE_KEY) setData(loadData()) }
     window.addEventListener('storage', handler)
     return () => window.removeEventListener('storage', handler)
   }, [])
 
   const updateNama = () => setData(d => ({ ...d, nama }))
-  const setTotalMatch = () => {
-    const n = parseInt(matchInput) || 0
-    setData(d => ({ ...d, totalMatch: n }))
-    setMatchInput('')
-  }
+  const setTotalMatch = () => { setData(d => ({ ...d, totalMatch: parseInt(matchInput) || 0 })); setMatchInput('') }
   const addMatch = (n: number) => setData(d => ({ ...d, totalMatch: d.totalMatch + n }))
-  const reset = () => { if (confirm('Reset total match?')) setData(d => ({ ...d, totalMatch: 0 })) }
+  const confirmReset = () => { setData(d => ({ ...d, totalMatch: 0 })); setShowReset(false) }
 
-  const webhookUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/api/match`
-  const copyWebhook = () => {
-    navigator.clipboard.writeText(webhookUrl).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    }).catch(() => {
-      const ta = document.createElement('textarea')
-      ta.value = webhookUrl
-      document.body.appendChild(ta)
-      ta.select()
-      document.execCommand('copy')
-      document.body.removeChild(ta)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    })
+  const copyWebhook = async () => {
+    const url = SOCIABUZZ_URL;
+    try {
+      // modern clipboard
+      await navigator.clipboard.writeText(url);
+      setCopied(true); setShowToast('✓ Copied');
+      setTimeout(() => { setCopied(false); setShowToast('') }, 2000);
+    } catch {
+      // fallback: textarea + execCommand
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = url;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        ta.style.top = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        setCopied(true); setShowToast('✓ Copied');
+        setTimeout(() => { setCopied(false); setShowToast('') }, 2000);
+      } catch {
+        setShowToast('Failed to copy');
+        setTimeout(() => setShowToast(''), 2000);
+      }
+    }
   }
 
   const totalAmount = data.totalMatch * 5000
 
   return (
-    <div className="min-h-screen bg-background text-foreground p-4 sm:p-8">
-      <div className="max-w-md mx-auto space-y-4">
-        <div className="text-center space-y-1 pt-4">
-          <h1 className="text-3xl font-bold tracking-tight">Match Control</h1>
-          <p className="text-sm text-muted-foreground">Kelola match dan integrasi Sociabuzz</p>
+    <div className="min-h-screen bg-black text-white font-mono">
+      <div className="max-w-md mx-auto px-5 py-8 space-y-8">
+        {/* Header */}
+        <div className="flex items-center justify-between text-xs uppercase tracking-widest text-white/40">
+          <span>Match Control</span>
+          <a href="/overlay" target="_blank" className="hover:text-white transition">Overlay →</a>
         </div>
 
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle>Setting</CardTitle>
-            <CardDescription>Atur nama dan total match</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">Nama</label>
-              <div className="flex gap-2">
-                <Input value={nama} onChange={e => setNama(e.target.value)} placeholder="Nama kamu" />
-                <Button onClick={updateNama} size="sm">Set</Button>
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">Total Match</label>
-              <div className="flex gap-2">
-                <Input type="number" value={matchInput} onChange={e => setMatchInput(e.target.value)} placeholder="Set total..." />
-                <Button onClick={setTotalMatch} size="sm" variant="outline">Set</Button>
-              </div>
-            </div>
-          </CardContent>
-          <CardFooter className="flex-col gap-3">
-            <div className="flex gap-2 w-full">
-              <Button onClick={() => addMatch(1)} size="sm" className="flex-1">+1</Button>
-              <Button onClick={() => addMatch(5)} size="sm" variant="secondary" className="flex-1">+5</Button>
-              <Button onClick={() => addMatch(10)} size="sm" variant="secondary" className="flex-1">+10</Button>
-              <Button onClick={reset} size="sm" variant="destructive">Reset</Button>
-            </div>
-          </CardFooter>
-        </Card>
+        {/* Hero Counter */}
+        <div className="text-center py-10">
+          <div className="text-[180px] font-black leading-[0.85] tabular-nums tracking-tighter">{data.totalMatch}</div>
+          <div className="text-[10px] uppercase tracking-[0.3em] text-white/40 mt-4">Total Match</div>
+        </div>
 
-        <Card className="border-primary/20 bg-primary/5">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center justify-between">
-              <span>Preview</span>
-              <Badge variant="secondary" className="text-lg font-black px-3 py-1">{data.totalMatch}</Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <div>
-              <p className="text-xs text-muted-foreground">Nama</p>
-              <p className="text-2xl font-bold">{data.nama || '—'}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Total Match</p>
-              <p className="text-4xl font-black text-primary">{data.totalMatch}</p>
-            </div>
-            <div className="pt-2 border-t border-primary/10">
-              <p className="text-sm text-muted-foreground">Estimasi</p>
-              <p className="text-xl font-bold text-emerald-500">Rp {totalAmount.toLocaleString('id-ID')}</p>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Stats */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="border border-white/10 rounded-lg p-3">
+            <div className="text-[10px] text-white/40 uppercase tracking-wider mb-1">Nama</div>
+            <div className="font-semibold text-sm truncate">{data.nama || '—'}</div>
+          </div>
+          <div className="border border-white/10 rounded-lg p-3">
+            <div className="text-[10px] text-white/40 uppercase tracking-wider mb-1">Earnings</div>
+            <div className="font-semibold text-sm">Rp {totalAmount.toLocaleString('id-ID')}</div>
+          </div>
+        </div>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Integrasi Sociabuzz</CardTitle>
-            <CardDescription className="text-xs">POST JSON ke webhook endpoint</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <code className="block bg-muted rounded-md p-2 text-xs font-mono break-all">POST {webhookUrl}</code>
-            <pre className="bg-muted rounded-md p-2 text-xs font-mono">{`{"nama": "...", "match": 1}`}</pre>
-          </CardContent>
-          <CardFooter>
-            <Button onClick={copyWebhook} variant="outline" size="sm" className="w-full">
-              {copied ? '✓ Copied!' : 'Copy Webhook URL'}
-            </Button>
-          </CardFooter>
-        </Card>
+        {/* Inputs */}
+        <div className="space-y-3">
+          <div className="flex gap-2">
+            <input
+              className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-white/30 placeholder:text-white/20"
+              value={nama} onChange={e => setNama(e.target.value)} placeholder="Nama" />
+            <button onClick={updateNama} className="bg-white text-black px-4 py-2 rounded-lg text-sm font-bold">Set</button>
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="number"
+              className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-white/30 placeholder:text-white/20"
+              value={matchInput} onChange={e => setMatchInput(e.target.value)} placeholder="Set total..." />
+            <button onClick={setTotalMatch} className="border border-white/20 px-4 py-2.5 rounded-lg text-sm">Set</button>
+          </div>
+        </div>
 
-        <div className="text-center pt-2">
-          <a href="/overlay" target="_blank" className="text-sm text-muted-foreground hover:text-foreground underline underline-offset-4">
-            Buka Overlay →
-          </a>
+        {/* Match Buttons */}
+        <div className="grid grid-cols-4 gap-2">
+          <button onClick={() => addMatch(1)} className="bg-white text-black py-3.5 rounded-lg font-bold text-base">+1</button>
+          <button onClick={() => addMatch(5)} className="border border-white/20 py-3.5 rounded-lg font-bold text-base">+5</button>
+          <button onClick={() => addMatch(10)} className="border border-white/20 py-3.5 rounded-lg font-bold text-base">+10</button>
+          <button onClick={() => setShowReset(true)} className="border border-white/20 py-3.5 rounded-lg font-bold text-base text-red-400">R</button>
+        </div>
+
+        {/* Webhook */}
+        <div className="border border-white/10 rounded-lg p-4 space-y-3">
+          <div className="text-[10px] text-white/40 uppercase tracking-wider">Sociabuzz Webhook</div>
+          <code className="block text-xs text-white/60 break-all">{SOCIABUZZ_URL}</code>
+          <pre className="text-xs text-white/40">{`{"nama":"...","match":1}`}</pre>
+          <button onClick={copyWebhook} className="border border-white/20 px-3 py-2 rounded-lg text-xs w-full">
+            {copied ? '✓ Copied' : 'Copy Webhook'}
+          </button>
         </div>
       </div>
+
+      {/* Reset Confirmation Modal */}
+      <Modal open={showReset} onClose={() => setShowReset(false)}>
+        <h3 className="text-lg font-bold mb-2">Reset Total Match?</h3>
+        <p className="text-sm text-white/60 mb-6">This will reset your match counter to zero.</p>
+        <div className="flex gap-3">
+          <button onClick={() => setShowReset(false)} className="flex-1 border border-white/20 py-2.5 rounded-lg text-sm">Cancel</button>
+          <button onClick={confirmReset} className="flex-1 bg-red-600 text-white py-2.5 rounded-lg text-sm font-semibold">Reset</button>
+        </div>
+      </Modal>
+
+      {/* Toast */}
+      {showToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-white text-black px-5 py-3 rounded-full text-sm font-semibold shadow-lg">
+          {showToast}
+        </div>
+      )}
     </div>
   )
 }
