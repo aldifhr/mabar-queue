@@ -1,69 +1,171 @@
-import Image from "next/image";
+'use client'
+
+import { useState, useEffect } from 'react'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+
+interface MatchData {
+  nama: string
+  totalMatch: number
+}
+
+const STORAGE_KEY = 'mabar-match'
+
+function loadData(): MatchData {
+  if (typeof window === 'undefined') return { nama: '', totalMatch: 0 }
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    return raw ? JSON.parse(raw) : { nama: '', totalMatch: 0 }
+  } catch {
+    return { nama: '', totalMatch: 0 }
+  }
+}
+
+function saveData(d: MatchData) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(d))
+  localStorage.setItem('mabar-channel', Date.now().toString())
+}
 
 export default function Home() {
+  const [data, setData] = useState<MatchData>({ nama: '', totalMatch: 0 })
+  const [nama, setNama] = useState('')
+  const [matchInput, setMatchInput] = useState('')
+  const [loaded, setLoaded] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    const d = loadData()
+    setData(d)
+    setNama(d.nama)
+    setLoaded(true)
+  }, [])
+
+  useEffect(() => {
+    if (loaded) saveData(data)
+  }, [data, loaded])
+
+  useEffect(() => {
+    const handler = (e: StorageEvent) => {
+      if (e.key === STORAGE_KEY) setData(loadData())
+    }
+    window.addEventListener('storage', handler)
+    return () => window.removeEventListener('storage', handler)
+  }, [])
+
+  const updateNama = () => setData(d => ({ ...d, nama }))
+  const setTotalMatch = () => {
+    const n = parseInt(matchInput) || 0
+    setData(d => ({ ...d, totalMatch: n }))
+    setMatchInput('')
+  }
+  const addMatch = (n: number) => setData(d => ({ ...d, totalMatch: d.totalMatch + n }))
+  const reset = () => { if (confirm('Reset total match?')) setData(d => ({ ...d, totalMatch: 0 })) }
+
+  const webhookUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/api/match`
+  const copyWebhook = () => {
+    navigator.clipboard.writeText(webhookUrl).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }).catch(() => {
+      const ta = document.createElement('textarea')
+      ta.value = webhookUrl
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
+
+  const totalAmount = data.totalMatch * 5000
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="min-h-screen bg-background text-foreground p-4 sm:p-8">
+      <div className="max-w-md mx-auto space-y-4">
+        <div className="text-center space-y-1 pt-4">
+          <h1 className="text-3xl font-bold tracking-tight">Match Control</h1>
+          <p className="text-sm text-muted-foreground">Kelola match dan integrasi Sociabuzz</p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle>Setting</CardTitle>
+            <CardDescription>Atur nama dan total match</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Nama</label>
+              <div className="flex gap-2">
+                <Input value={nama} onChange={e => setNama(e.target.value)} placeholder="Nama kamu" />
+                <Button onClick={updateNama} size="sm">Set</Button>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Total Match</label>
+              <div className="flex gap-2">
+                <Input type="number" value={matchInput} onChange={e => setMatchInput(e.target.value)} placeholder="Set total..." />
+                <Button onClick={setTotalMatch} size="sm" variant="outline">Set</Button>
+              </div>
+            </div>
+          </CardContent>
+          <CardFooter className="flex-col gap-3">
+            <div className="flex gap-2 w-full">
+              <Button onClick={() => addMatch(1)} size="sm" className="flex-1">+1</Button>
+              <Button onClick={() => addMatch(5)} size="sm" variant="secondary" className="flex-1">+5</Button>
+              <Button onClick={() => addMatch(10)} size="sm" variant="secondary" className="flex-1">+10</Button>
+              <Button onClick={reset} size="sm" variant="destructive">Reset</Button>
+            </div>
+          </CardFooter>
+        </Card>
+
+        <Card className="border-primary/20 bg-primary/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center justify-between">
+              <span>Preview</span>
+              <Badge variant="secondary" className="text-lg font-black px-3 py-1">{data.totalMatch}</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <div>
+              <p className="text-xs text-muted-foreground">Nama</p>
+              <p className="text-2xl font-bold">{data.nama || '—'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Total Match</p>
+              <p className="text-4xl font-black text-primary">{data.totalMatch}</p>
+            </div>
+            <div className="pt-2 border-t border-primary/10">
+              <p className="text-sm text-muted-foreground">Estimasi</p>
+              <p className="text-xl font-bold text-emerald-500">Rp {totalAmount.toLocaleString('id-ID')}</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Integrasi Sociabuzz</CardTitle>
+            <CardDescription className="text-xs">POST JSON ke webhook endpoint</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <code className="block bg-muted rounded-md p-2 text-xs font-mono break-all">POST {webhookUrl}</code>
+            <pre className="bg-muted rounded-md p-2 text-xs font-mono">{`{"nama": "...", "match": 1}`}</pre>
+          </CardContent>
+          <CardFooter>
+            <Button onClick={copyWebhook} variant="outline" size="sm" className="w-full">
+              {copied ? '✓ Copied!' : 'Copy Webhook URL'}
+            </Button>
+          </CardFooter>
+        </Card>
+
+        <div className="text-center pt-2">
+          <a href="/overlay" target="_blank" className="text-sm text-muted-foreground hover:text-foreground underline underline-offset-4">
+            Buka Overlay →
           </a>
         </div>
-      </main>
+      </div>
     </div>
-  );
+  )
 }
